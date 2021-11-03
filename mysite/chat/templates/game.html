@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+{% block content %}
+{{ room_name|json_script:"room-name" }}
+<script>
+    async function ready(){
+        comment_game = document.querySelector('.comment_game')
+        comment_game.addEventListener('click', render_form);
+        answer_buttons = document.querySelectorAll('.answer_comment')
+        for (button of answer_buttons){
+            button.addEventListener('click', render_form);
+        }
+    }
+
+    const queryString = window.location.href;
+    url_separated = queryString.split("/")
+    const game_id = url_separated[4]
+
+    const chatSocket = new WebSocket(
+        'ws://'
+        + window.location.host
+        + '/ws/comments/'
+        + game_id
+        + '/'
+    );
+
+    async function render_form(){
+        
+        elem = event.target;
+
+        let input_text_field = document.createElement('input');
+        input_text_field.type = 'text';
+
+        let input_submit = document.createElement('input');
+        input_submit.type = 'submit';
+
+        input_text_field.id = 'comment_game_text';
+        input_submit.id = 'comment_game_submit';
+
+        input_text_field.addEventListener('keyup', send_data);
+        input_submit.addEventListener('click', send_data);
+
+        if (elem.className == 'comment_game'){
+            input_text_field.className = 'solo_comment';
+            input_submit.className = 'solo_comment';
+        }
+        else{
+            input_text_field.className = elem.id;
+            input_submit.className = elem.id; 
+        }
+
+        comment_game.style.display = 'none';
+        comment_form_hadle.append(input_text_field)
+        comment_form_hadle.append(input_submit)
+    }
+
+    async function send_data(){
+
+        if ((event.type == 'keyup' && event.keyCode == 13) || event.type == 'click'){
+            message = comment_game_text.value;
+            elem = event.target;
+            let comment_status;
+
+            if (elem.className =='solo_comment'){
+                comment_status = 'solo';
+            }
+            else{
+                comment_status = elem.className;
+            }
+
+            comment_data = {
+                message: message,
+                game_id: game_id,
+                comment_status: comment_status
+            }
+            // alert(message)
+            // alert(game_id)
+            // alert(comment_status)
+
+            await chatSocket.send(JSON.stringify(
+                {
+                'message': comment_data
+                }))
+
+            comment_game_submit.remove();
+            comment_game_text.remove();
+
+            comment_game.style.display = 'block';
+        }
+    }
+
+    chatSocket.onmessage = function(event) {
+
+        const data = JSON.parse(event.data);
+        let parent_elem = null;
+
+        let new_comment_text = document.createElement('div');
+        new_comment_text.textContent = data.message.text;
+
+        let new_comment_date = document.createElement('div');
+        new_comment_date = data.message.pub_date;
+
+        let new_comment_user = document.createElement('div');
+        new_comment_user= data.message.user;
+        
+        alert(data.message.reply_to_id)
+
+        if (data.message.comment_status != 'solo'){
+            parent_elem = document.getElementById(data.message.reply_to_id)
+        }
+
+        answer_button = document.createElement('button');
+        answer_button.id = data.message.id;
+        answer_button.className = 'answer_comment'
+        answer_button.textContent = 'Ответить';
+        answer_button.addEventListener('click', render_form)
+        
+        if (parent_elem){
+            parent_elem.after(new_comment_user)
+            parent_elem.after(new_comment_date)
+            parent_elem.after(new_comment_text)
+            new_comment_text.after(answer_button)
+        }
+        else{
+            comments.append(new_comment_user)
+            comments.append(new_comment_date)
+            comments.append(new_comment_text)
+            comments.append(answer_button)
+        }
+        br = document.createElement('br')
+        comments.append(br)
+    };
+
+    chatSocket.onclose = function(e) {
+        console.error('Chat socket closed unexpectedly');
+    };
+
+        document.addEventListener("DOMContentLoaded", ready);
+</script>
+
+<div class = "details_content">
+<div class = "post">
+
+<h2 class ='title'>Название: {{game.name}}</h2>
+
+<button class='comment_game'>Комментировать</button>
+
+<div id='comment_form_hadle'></div>
+<div id='{{game.id}}'> ну типо игра</div>
+<div id='comments'></div>
+
+{% for comment in comments %}
+    <div id = "to{{comment.pk}}">{{comment.user}}</div>
+    <div>{{comment.pub_date}}</div>
+
+    <div>{%if comment.replied_user_name != 'None'%}{{comment.replied_user_name}},{%endif%} {{comment.texts}}</div>
+    </div>
+    <button class = 'answer_comment' id='{{comment.pk}}'>Ответить</button>
+{% endfor %}
+</div>
+</div>
+
+{% endblock content %}
